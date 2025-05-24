@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Калькулятор сложных формул</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #121212;
+    color: #eee;
+    margin: 0; padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 {
+    margin-bottom: 10px;
+  }
+  #calculator {
+    background: #222;
+    padding: 20px;
+    border-radius: 12px;
+    width: 350px;
+    box-shadow: 0 0 15px #0ff;
+  }
+  #formula {
+    width: 100%;
+    font-size: 20px;
+    padding: 8px;
+    border-radius: 8px;
+    border: none;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+    background: #111;
+    color: #0ff;
+  }
+  #result {
+    background: #111;
+    color: #0f0;
+    padding: 12px;
+    font-size: 24px;
+    border-radius: 8px;
+    min-height: 40px;
+    margin-bottom: 15px;
+    user-select: text;
+  }
+  button {
+    background: #0ff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin: 4px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #222;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.3s ease;
+  }
+  button:hover {
+    background: #0cc;
+  }
+  #buttons {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  #history {
+    margin-top: 20px;
+    background: #111;
+    padding: 10px;
+    border-radius: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  #history h2 {
+    margin-top: 0;
+    font-size: 18px;
+    color: #0ff;
+  }
+  .history-item {
+    padding: 6px;
+    border-bottom: 1px solid #222;
+    cursor: pointer;
+    color: #0f0;
+  }
+  .history-item:hover {
+    background: #0f0a0f;
+  }
+  #error {
+    color: #f66;
+    margin-bottom: 10px;
+    min-height: 20px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Калькулятор сложных формул</h1>
+
+<div id="calculator">
+  <input type="text" id="formula" placeholder="Введите формулу, например: sin(30)+log(10)*3" spellcheck="false" autocomplete="off" />
+  <div id="error"></div>
+  <div id="result">Результат: </div>
+
+  <div id="buttons">
+    <button data-val="7">7</button>
+    <button data-val="8">8</button>
+    <button data-val="9">9</button>
+    <button data-val="(">(</button>
+    <button data-val=")">)</button>
+
+    <button data-val="4">4</button>
+    <button data-val="5">5</button>
+    <button data-val="6">6</button>
+    <button data-val="+">+</button>
+    <button data-val="-">-</button>
+
+    <button data-val="1">1</button>
+    <button data-val="2">2</button>
+    <button data-val="3">3</button>
+    <button data-val="*">*</button>
+    <button data-val="/">/</button>
+
+    <button data-val="0">0</button>
+    <button data-val=".">.</button>
+    <button data-val="sin(">sin</button>
+    <button data-val="cos(">cos</button>
+    <button data-val="tan(">tan</button>
+
+    <button data-val="log(">log</button>
+    <button data-val="sqrt(">sqrt</button>
+    <button data-val="abs(">abs</button>
+    <button id="clear">C</button>
+    <button id="equal">=</button>
+  </div>
+
+  <div id="history">
+    <h2>История</h2>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<script>
+  const formulaInput = document.getElementById('formula');
+  const resultDiv = document.getElementById('result');
+  const errorDiv = document.getElementById('error');
+  const buttons = document.querySelectorAll('#buttons button[data-val]');
+  const clearBtn = document.getElementById('clear');
+  const equalBtn = document.getElementById('equal');
+  const historyList = document.getElementById('historyList');
+
+  let history = [];
+
+  // Функция вычисления с использованием Math и функции eval с ограничениями
+  function safeEval(expr) {
+    // Запрещаем опасные символы и функции
+    if (/[^0-9+\-*/().,a-zA-Z ]/.test(expr)) {
+      throw new Error('Недопустимые символы в формуле');
+    }
+
+    // Определяем допустимые функции
+    const funcs = {
+      sin: Math.sin,
+      cos: Math.cos,
+      tan: Math.tan,
+      log: Math.log10 || ((x) => Math.log(x) / Math.LN10),
+      sqrt: Math.sqrt,
+      abs: Math.abs,
+    };
+
+    // Заменяем функции на вызовы через funcs
+    let safeExpr = expr;
+
+    // Преобразуем градусы в радианы для sin, cos, tan (предполагаем ввод в градусах)
+    // заменим sin(x) -> sin(degToRad(x))
+    function degToRad(x) { return x * Math.PI / 180; }
+
+    safeExpr = safeExpr.replace(/(sin|cos|tan)\s*\(\s*([^)]+)\s*\)/g, (match, func, val) => {
+      return `funcs.${func}(${degToRad(Number(val))})`;
+    });
+
+    // остальные функции просто заменим на funcs.*
+    safeExpr = safeExpr.replace(/(log|sqrt|abs)\s*\(\s*([^)]+)\s*\)/g, (match, func, val) => {
+      return `funcs.${func}(${val})`;
+    });
+
+    // Заменяем запятую на точку в десятичных
+    safeExpr = safeExpr.replace(/,/g, '.');
+
+    // Запускаем eval в безопасном режиме с funcs доступными
+    // eslint-disable-next-line no-new-func
+    const func = new Function('funcs', 'return ' + safeExpr + ';');
+
+    return func(funcs);
+  }
+
+  // Функция для пошагового вычисления (покажу упрощённо: будем выводить саму формулу и результат)
+  function calculate() {
+    const expr = formulaInput.value.trim();
+    errorDiv.textContent = '';
+    resultDiv.textContent = 'Результат: ';
+    if (!expr) return;
+
+    try {
+      const res = safeEval(expr);
+      if (typeof res === 'number' && !isNaN(res) && isFinite(res)) {
+        resultDiv.textContent = 'Результат: ' + res.toFixed(6);
+        addToHistory(expr, res.toFixed(6));
+      } else {
+        throw new Error('Некорректный результат');
+      }
+    } catch (e) {
+      errorDiv.textContent = 'Ошибка: ' + e.message;
+    }
+  }
+
+  // Добавить в историю
+  function addToHistory(expr, res) {
+    history.unshift({ expr, res });
+    if (history.length > 20) history.pop();
+    renderHistory();
+  }
+
+  // Отрисовка истории
+  function renderHistory() {
+    historyList.innerHTML = '';
+    for (const item of history) {
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.textContent = `${item.expr} = ${item.res}`;
+      div.title = 'Нажмите, чтобы вставить в формулу';
+      div.addEventListener('click', () => {
+        formulaInput.value = item.expr;
+        formulaInput.focus();
+        errorDiv.textContent = '';
+        resultDiv.textContent = 'Результат: ';
+      });
+      historyList.appendChild(div);
+    }
+  }
+
+  // Обработка кнопок
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      formulaInput.value += btn.dataset.val;
+      formulaInput.focus();
+    });
+  });
+
+  clearBtn.addEventListener('click', () => {
+    formulaInput.value = '';
+    errorDiv.textContent = '';
+    resultDiv.textContent = 'Результат: ';
+  });
+
+  equalBtn.addEventListener('click', () => {
+    calculate();
+  });
+
+  // Enter на инпуте тоже вычисляет
+  formulaInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      calculate();
+    }
+  });
+
+</script>
+
+</body>
+</html>
+ыы
+
+
